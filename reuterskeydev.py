@@ -19,17 +19,20 @@ def getKeyDevList(ticker):
     ticker is a string representing a stock ticker, e.g. 'GS', 'XOM', 'AAPL', 'GOOG' 
     
     returns a list of tuples, one for each key development, of the form
-    (article title, date of publication, article text)
+    (article title, date of publication, article text). title and text are saved
+    as strings and the date of publication is a python date object (see:datetime)
     '''
     today = datetime.date.today()
                   
     curr_date = today
-    target_date = datetime.date(today.year - 1, today.month, today.day)
+    target_date = datetime.date(today.year - 1, today.month, today.day) # Change to function argument
     
     story_tuple_list = [] # store tuples of (title, date, text)
+    curr_len = -1 # needed to handle tickers with less than a year of articles
     pagenum = 1
     pagenum_stub = r'?pn='
-    while curr_date >= target_date:
+    while curr_date >= target_date and len(story_tuple_list) != curr_len:
+        curr_len = len(story_tuple_list)
         if pagenum == 1:
             page_str = ''
         else:
@@ -75,22 +78,25 @@ def getKeyDevList(ticker):
             text = lines[2]
             story_tuple = (title, date, text)
             story_tuple_list.append(story_tuple)
+            
         curr_date = story_tuple_list[len(story_tuple_list) - 1][1]
         pagenum += 1
     return(story_tuple_list)
 
 # Testing, print most recent year of news for 50 companies from the S&P
-ticker_list = ['MMM', 'ADBE', 'AET', 'AFL', 'ARE', 'LNT', 'ALL', 'GOOG',
-               'AMZN', 'AAL', 'AMP', 'AMGN', 'AON', 'APA', 'AAPL', 'T',
-               'BAC', 'BBT', 'BLK', 'BA', 'BXP', 'BMY', 'COG', 'CPB', 'CAT',
-               'CVX', 'CMG', 'CSCO', 'C', 'KO', 'COST', 'DVA', 'DPS', 'DD',
-               'EBAY', 'EA', 'EXPE', 'FB', 'GE', 'GS', 'HAL', 'HPQ', 'HUM',
-               'INTC', 'INTU', 'JPM', 'KHC', 'LNC', 'LYB', 'MCD']
-             
-start_time = time.time()
-for ticker in ticker_list:
-    print(ticker)
-    getKeyDevList(ticker)
-print(time.time() - start_time)
+if __name__ == "__main__":
+    
+    ticker_list = ['MMM', 'ADBE', 'AET', 'AFL', 'ARE', 'LNT', 'ALL', 'GOOG',
+                   'AMZN', 'AAL', 'AMP', 'AMGN', 'AON', 'APA', 'AAPL', 'T',
+                   'BAC', 'BBT', 'BLK', 'BA', 'BXP', 'BMY', 'COG', 'CPB', 'CAT',
+                   'CVX', 'CMG', 'CSCO', 'C', 'KO', 'COST', 'DVA', 'DPS', 'DD',
+                   'EBAY', 'EA', 'EXPE', 'FB', 'GE', 'GS', 'HAL', 'HPQ', 'HUM',
+                   'INTC', 'INTU', 'JPM', 'KHC', 'LNC', 'LYB', 'MCD']
+                 
+    start_time = time.time()
+    for ticker in ticker_list:
+        print(ticker)
+        getKeyDevList(ticker)
+    print(time.time() - start_time)
 
 #result: took 51.9 seconds for 50 companies, about 1 second each
