@@ -11,7 +11,7 @@ month_dict = {'Jan' : 1, 'Feb' : 2, 'Mar' : 3, 'Apr' : 4, 'May' : 5, 'Jun' : 6,
               'Jul' : 7, 'Aug' : 8, 'Sep' : 9, 'Oct' : 10, 'Nov' : 11, 'Dec' : 12}
                 
 
-def getKeyDevList(ticker):
+def getKeyDevList(ticker, target_date):
     '''
     queries Reuters Key Developments website for the most recent year of news 
     written about the given ticker. 
@@ -25,7 +25,7 @@ def getKeyDevList(ticker):
     today = datetime.date.today()
                   
     curr_date = today
-    target_date = datetime.date(today.year - 1, today.month, today.day) # Change to function argument
+    #target_date = datetime.date(today.year - 1, today.month, today.day) # Change to function argument
     
     story_tuple_list = [] # store tuples of (title, date, text)
     curr_len = -1 # needed to handle tickers with less than a year of articles
@@ -85,18 +85,19 @@ def getKeyDevList(ticker):
 
 # Testing, print most recent year of news for 50 companies from the S&P
 if __name__ == "__main__":
+    print(getKeyDevList('GOOG', datetime.date(2009, 11, 30)))
     
-    ticker_list = ['MMM', 'ADBE', 'AET', 'AFL', 'ARE', 'LNT', 'ALL', 'GOOG',
-                   'AMZN', 'AAL', 'AMP', 'AMGN', 'AON', 'APA', 'AAPL', 'T',
-                   'BAC', 'BBT', 'BLK', 'BA', 'BXP', 'BMY', 'COG', 'CPB', 'CAT',
-                   'CVX', 'CMG', 'CSCO', 'C', 'KO', 'COST', 'DVA', 'DPS', 'DD',
-                   'EBAY', 'EA', 'EXPE', 'FB', 'GE', 'GS', 'HAL', 'HPQ', 'HUM',
-                   'INTC', 'INTU', 'JPM', 'KHC', 'LNC', 'LYB', 'MCD']
-                 
-    start_time = time.time()
-    for ticker in ticker_list:
-        print(ticker)
-        getKeyDevList(ticker)
-    print(time.time() - start_time)
+#    ticker_list = ['MMM', 'ADBE', 'AET', 'AFL', 'ARE', 'LNT', 'ALL', 'GOOG',
+#                   'AMZN', 'AAL', 'AMP', 'AMGN', 'AON', 'APA', 'AAPL', 'T',
+#                   'BAC', 'BBT', 'BLK', 'BA', 'BXP', 'BMY', 'COG', 'CPB', 'CAT',
+#                   'CVX', 'CMG', 'CSCO', 'C', 'KO', 'COST', 'DVA', 'DPS', 'DD',
+#                   'EBAY', 'EA', 'EXPE', 'FB', 'GE', 'GS', 'HAL', 'HPQ', 'HUM',
+#                   'INTC', 'INTU', 'JPM', 'KHC', 'LNC', 'LYB', 'MCD']
+#                 
+#    start_time = time.time()
+#    for ticker in ticker_list:
+#        print(ticker)
+#        getKeyDevList(ticker, datetime.date(2009, 11, 30))
+#    print(time.time() - start_time)
 
 #result: took 51.9 seconds for 50 companies, about 1 second each

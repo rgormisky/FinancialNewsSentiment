@@ -14,9 +14,29 @@ import wordcounter as wc
 import openpyxl as pyxl
 import numpy as np
 import reuterskeydev as rkd
+import datetime, csv
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
+# For writing date objects to csv files
+def date_tostring(date_obj):
+    '''
+    converts python datetime.date object to MMDDYYYY representation. used for
+    Reuters news URL generation.
+    '''
+    months = date_obj.month
+    days = date_obj.day
+    years = date_obj.year
+    if days < 10:
+        days_str = '0' + str(days)
+    else:
+        days_str = str(days)
+    if months < 10:
+        months_str = '0' + str(months)
+    else:
+        months_str = str(months)
+    years_str = str(years)
+    return(months_str + '/' + days_str + '/' + years_str)
 
 # For reporting and debugging the topic output
 def print_top_words(model, feature_names, n_top_words):
@@ -26,6 +46,8 @@ def print_top_words(model, feature_names, n_top_words):
                         for i in topic.argsort()[:-n_top_words - 1:-1]]))
     print()
 
+target_date = datetime.date(2008, 11, 30)    
+    
 ticker_wb = pyxl.load_workbook('SPtickers.xlsx')
 first_sheet_name = ticker_wb.get_sheet_names()[0]
 first_sheet = ticker_wb.get_sheet_by_name(first_sheet_name)
@@ -38,17 +60,16 @@ ticker_list = [r[0] for r in ticker_data]
 ticker_ban_list = ['HAR', 'LLTC'] #HAR is Indian company, LLTC acquired by ADI
 
 event_tuple_list = [] #(headline, date, article text, word count, pos words, neg words)
-for ticker in ['AAPL']:#ticker_list:
+for ticker in ticker_list:
     print(ticker)
     if ticker in ticker_ban_list:
         continue
-    three_tuples = rkd.getKeyDevList(ticker)
+    three_tuples = rkd.getKeyDevList(ticker, target_date)
     # Only checks for positive words in article text, include headline?
     for three_tuple in three_tuples:
         word_count, pos_word_count = wc.count_words(three_tuple[2], 'pos')
         _, neg_word_count = wc.count_words(three_tuple[2], 'neg')
-        print(pos_word_count, neg_word_count)
-        wc_tuple = (word_count, pos_word_count, neg_word_count)
+        wc_tuple = (word_count, pos_word_count, neg_word_count, ticker)
         event_tuple = three_tuple + wc_tuple
         event_tuple_list.append(event_tuple)
 
@@ -58,6 +79,13 @@ neg_word_counts = [r[5] for r in event_tuple_list]
 print('mean_pos_words= ', np.mean(pos_word_counts), 
       'mean_neg_words= ', np.mean(neg_word_counts))
 
+output_tuples = [(date_tostring(r[1]), str(r[3]), str(r[4]), str(r[5]), r[6]) for
+                 r in event_tuple_list]
+csvname = "raweventlist.csv"
+with open(csvname, "w") as csvfile:
+    writer = csv.writer(csvfile, delimiter=',', quotechar='|', 
+                        quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
+    writer.writerows(output_tuples)
 
 # Begin LDA on the entire S&P corpus
 #n_samples = len(article_text_list)
@@ -101,9 +129,5 @@ print('mean_pos_words= ', np.mean(pos_word_counts),
 #  Find theta distributions
 #  topic_dist = lda.transform(tf)
 #  
-#  csvname = datadir + "k" + str(k) + ".csv"
-#  with open(csvname, "wb") as csvfile:
-#    writer = csv.writer(csvfile, delimiter=',', quotechar='|', 
-#                        quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
-#    writer.writerows(topic_dist)
+
 
