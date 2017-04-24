@@ -21,7 +21,8 @@ colnames(events.data) <- c("date", "word.count", "pos", "neg", "ticker")
 # 31: Foreign Agency, 32: Foreign Local Govt
 sector.data <- read.csv("C:/Users/Rob/Desktop/OID 311/GroupProject/FinancialNewsSentiment-master/sectorOAS.csv", header=T,
                         stringsAsFactors = F)[-(1:10), -1]
-
+returns.data <- read.csv("C:/Users/Rob/Desktop/OID 311/GroupProject/FinancialNewsSentiment-master/returns.csv", header=F,
+                         stringsAsFactors = F)
 #sector.data[, 64] is last column of relevant data
 
 reformat.date <- function(date) {
@@ -225,18 +226,178 @@ Fstat <- (sse.reduced - sse.full) / (sse.full / (length(lag.model$fitted.values)
 anova(vixonly.model, lag.model)
 
 # SPREAD MODELS
-oas.data <- sector.data[-((nrow(oas.data) - 8):nrow(oas.data)), seq(9, 63, by=2)] #starts with credit industry
+oas.data1 <- sector.data[, seq(9, 63, by=2)] #starts with credit industry
+oas.data <- oas.data1[-((nrow(oas.data1) - 8):nrow(oas.data1)), ]
 for (i in 1:ncol(oas.data)) {
   oas.data[, i] <- as.numeric(oas.data[, i])
 }
-cnames <- c("Cred", "Corp", "FinInst", "Bank", "Broke", "FinCo", "Insur", "REIT", "OthFin", 
+cnames <- c("Cred", "OAS", "FinInst", "Bank", "Broke", "FinCo", "Insur", "REIT", "OthFin", 
             "TotInd", "BasInd", "CapGood", "ConCyc", "ConNC", "Ener", "Tech", "Trans",
             "Comm", "OthInd", "TotUt", "Elec", "NatGas", "OthUt", "TotNoCo", "Supra", "Sov",
             "ForAg", "ForGov")
 colnames(oas.data) <- cnames
 
-corp.data <- cbind(lag.data, c(oas.data[-nrow(oas.data), ]))
-corp.full <- lm(Corp ~ SentimentRat + vix.lag1, data= corp.data)
-corp.reduced <- lm(Corp ~ vix.lag1, data= corp.data)
+corp.data <- cbind(lag.data, oas.data[-nrow(oas.data), ], "Corp.lag1" = oas.data[-1, "OAS"])
+
+corp.full <- lm("OAS ~ SentimentRat + vix.lag1", data= corp.data)
+corp.reduced <- lm(OAS ~ vix.lag1, data= corp.data)
 anova(corp.reduced, corp.full)
-summary(corp.model); dwtest(corp.model)
+summary(corp.full); dwtest(corp.full)
+
+corp.sentonly <- lm(Corp ~ SentimentRat, data= corp.data)
+summary(corp.sentonly); dwtest(corp.sentonly)
+
+library(sandwich)
+corp.vcov <- NeweyWest(corp.full, lag= 1)
+coeftest(corp.full, corp.vcov)
+
+basis.plot <- function(model, title) {
+  plot(model$residuals, type= "l", col= "blue", main= title, xlab= "Weeks since 4/24/15", ylab= "Basis Risk (bps)")
+  lines(rep(0, length(model$residuals)))
+  sd.err <- summary(model)$sigma
+  lines(rep(sd.err, length(model$residuals)), col='red')
+  lines(rep(-sd.err, length(model$residuals)), col='red') 
+}
+
+# list elements are lists of (lm call, summary, dwtest, Newey-West coeftest)
+model.list <- vector(mode= "list", length= length(cnames))
+formula.tail <- " ~ SentimentRat + vix.lag1"
+for (i in 1:length(cnames)) {
+  formula <- paste0(cnames[i], formula.tail)
+  spread.model <- lm(formula, data= corp.data)
+  spread.summary <- summary(spread.model)
+  durbwat.test <- dwtest(spread.model)
+  spread.vcov <- NeweyWest(spread.model, lag= 1)
+  model.list[[i]] <- list(spread.model, spread.summary, durbwat.test, coeftest(spread.model, spread.vcov))
+}
+
+ind.idx <- which(cnames == 'Supra')
+ind.model <- model.list[[ind.idx]][[1]]
+basis.plot(ind.model)
+ind.model$residuals[length(ind.model$residuals)] / sd(ind.model$residuals)
+
+cheapness <- function(week) {
+  cheapness <- rep(0, length(cnames))
+  for (i in 1:length(cheapness)) {
+    ind.model <- model.list[[i]][[1]]
+    cheapness[i] <- ind.model$residuals[week] / summary(ind.model)$sigma
+  }
+  return(rbind(cnames, cheapness))
+}
+
+totalreturns.data <- returns.data[-((nrow(returns.data) - 8):nrow(returns.data)), seq(1, ncol(returns.data) - 1, by= 2)]
+totalreturns.cnames <- c("Total", "Govt", "Treasury", "Agency", "Cred", "Corp", "FinInst", "Bank", "Broke", 
+               "FinCo", "Insur", "REIT", "OthFin", "TotInd", "BasInd", "CapGood", "ConCyc", "ConNC", 
+               "Ener", "Tech", "Trans", "Comm", "OthInd", "TotUt", "Elec", "NatGas", "OthUt", 
+               "TotNoCo", "Supra", "Sov", "ForAg", "ForGov", "Secur", "MBS", "AgFix", "GNMA30",
+               "Conv30", "Conv15", "Conv20", "AgHyb", "3/1", "5/1", "7/1", "CMBS", "NonAg", "AgCMBS",
+               "TotABS", "ABS", "ABCred", "ABAuto", "ABUtil", "Other")
+colnames(totalreturns.data) <- totalreturns.cnames
+totalreturns.clean <- totalreturns.data[, -41]
+totalreturns.clean[102:103, 13] <- rep(totalreturns.data[101, 13], 2)
+
+mv.data <- sector.data[-((nrow(sector.data) - 8):nrow(sector.data)), seq(2, ncol(sector.data) - 1, by= 2)]
+colnames(mv.data) <- totalreturns.cnames
+for (i in 1:ncol(mv.data)) {
+  mv.data[, i] <- as.numeric(gsub(",", "", mv.data[, i]))
+}
+
+mv.bad.idx <- which(is.na(mv.data), arr.ind= T)
+mv.data[mv.bad.idx[1:7, 1], mv.bad.idx[1, 2]] <- mv.data[mv.bad.idx[1,1] - 1, mv.bad.idx[1, 2]]
+mv.data[mv.bad.idx[8:nrow(mv.bad.idx), 1], mv.bad.idx[8, 2]] <- mv.data[mv.bad.idx[8,1] - 1, mv.bad.idx[8, 2]]
+
+level1.cols <- c("Govt", "FinInst", "TotInd", "TotUt", "TotNoCo", "Secur")
+index.alloc <- mv.data[, level1.cols] / mv.data[, "Total"]
+apply(index.alloc, 2, sd)
+# Determine allocation to corporate credit
+# 5% reduction in corp credit alloc for every sd of basis risk
+my.alloc <- matrix(rep(0, nrow(index.alloc)*ncol(index.alloc)), nrow= nrow(index.alloc))
+for (i in 1:nrow(lag.data)) {
+  cheap.mat <- cheapness(i)
+  corp.col.idx <- which(cheap.mat[1, ] == "Corp")
+  corp.cheapness <- cheap.mat[2, corp.col.idx]
+  corp.adjustment <- .1 * as.numeric(corp.cheapness)
+  corp.alloc <- sum(index.alloc[i+1, c("FinInst", "TotInd", "TotUt")])
+  fin.adjustment <- corp.adjustment * (index.alloc[i+1, "FinInst"] / corp.alloc)
+  fin.alloc <- fin.adjustment + index.alloc[i+1, "FinInst"]
+  totind.adjustment <- corp.adjustment * (index.alloc[i+1, "TotInd"] / corp.alloc)
+  totind.alloc <- totind.adjustment + index.alloc[i+1, "TotInd"]
+  totut.adjustment <- corp.adjustment * (index.alloc[i+1, "TotUt"] / corp.alloc)
+  totut.alloc <- totut.adjustment + index.alloc[i+1, "TotUt"]
+  
+  my.remaining <- 1 - (corp.alloc + corp.adjustment)
+  index.remaining <- 1 - corp.alloc
+  govt.alloc <- my.remaining * (index.alloc[i+1, "Govt"] / index.remaining)
+  totnoco.alloc <- my.remaining * (index.alloc[i+1, "TotNoCo"] / index.remaining)
+  secur.alloc <- my.remaining * (index.alloc[i+1, "Secur"] / index.remaining)
+  
+  my.alloc[i+1, ] <- c(govt.alloc, fin.alloc, totind.alloc, totut.alloc, totnoco.alloc, secur.alloc)
+}
+# No prediction for first period
+for (i in 1:ncol(my.alloc)) {
+  my.alloc[1, i] <- index.alloc[1, i]
+}
+
+my.returns <- (totalreturns.clean[, level1.cols] / 100) * my.alloc
+index.returns <- (totalreturns.clean[, level1.cols] / 100) * index.alloc
+
+my.ret.t <- rep(0, nrow(my.returns))
+index.ret.t <-  rep(0, nrow(my.returns))
+for (i in 1:nrow(my.returns)) {
+  my.ret.t[i] <- prod(apply(my.returns[1:i, ], 2, function(x) prod(1+x)))
+  index.ret.t[i] <- prod(apply(index.returns[1:i, ], 2, function(x) prod(1+x)))
+}
+
+plot(1:length(my.ret.t), my.ret.t, type= "l", col= "red")
+lines(1:length(my.ret.t), index.ret.t, type= "l", col= "blue")
+
+annualized.excessreturns <- ((((my.ret.t[103] - index.ret.t[103]) + 1)^0.5) - 1) * 100
+
+annualized.sd <- sd((my.ret.t - 1)*100) 
+
+sd(my.ret.t) * 100
+
+sharpe.ratio <- annualized.excessreturns / annualized.sd
+
+library(ggplot2)
+ggplot.df <- data.frame("time" = cbind(1:length(my.ret.t), "tradereturns"= my.ret.t, "indexreturns"= index.ret.t))
+
+
+
+1015056820 * my.alloc[103, ];1015056820 *  index.alloc[103, ]
+
+sentiment <- reg.data[, 2]
+c(summary(sentiment), stdev= sd(sentiment))
+hist(sentiment, 20)
+
+gov.data1 <- sector.data[, 7] #starts with credit industry
+gov.data <- as.numeric(gov.data1[-((length(gov.data1) - 8):length(gov.data1))])
+gov.df <-  cbind(lag.data, "Gov"= gov.data[-length(gov.data)])
+gov.model <- lm(Gov ~ SentimentRat+ vix.lag1, data = gov.df)
+summary(gov.model); dwtest(gov.model)
+
+sec.data1 <- sector.data[, 65] #starts with credit industry
+sec.data <- as.numeric(sec.data1[-((length(sec.data1) - 8):length(sec.data1))])
+sec.df <-  cbind(lag.data, "Sec"= sec.data[-length(sec.data)])
+sec.model <- lm(Sec ~ SentimentRat+ vix.lag1, data = sec.df)
+summary(sec.model); dwtest(sec.model)
+
+basis.plot(corp.full, "IG Corporate Basis Risk")
+plot(oas.data[, 'Corp'], type= "l", col= "blue", main= "Fitted vs. Actual OAS",
+     xlab= "Weeks since 4/24/15", ylab= "OAS (bps)")
+lines(corp.full$fitted.values, col= "red")
+legend(65, 210, c("Fitted OAS", "Actual OAS"), col= c("red", "blue"), lty= c(1,1),
+       lwd = c(2.5, 2.5))
+
+ind.idx <- which(cnames == 'FinInst')
+ind.model <- model.list[[ind.idx]][[1]]
+basis.plot(ind.model, "Utilities Basis Risk")
+ind.model$residuals[length(ind.model$residuals)] / sd(ind.model$residuals)
+
+plot(my.ret.t, type= "l", col= "blue", main= "Spread Model Backtest",
+     xlab= "Weeks since 4/24/15", ylab= "Cumulative Wealth")
+lines(index.ret.t, col= "red")
+legend(65, .995, c("Strategy", "Index"), col= c("blue", "red"), lty= c(1,1),
+       lwd = c(2.5, 2.5))
+
+rbind(cnames, cheapness(102))
