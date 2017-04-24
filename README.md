@@ -8,3 +8,5 @@ SP500Sentiment.py - This script aggregates Reuters Key Developments queries for 
 wordcounter.py - This script provides a function to count the ratios of positive or negative words in a document based on the General Inquirer dictionary (defintions contained in inquirerbasic.xlsx). 
 
 VixReutersModel.R - All the data analysis and modeling is done in this R script.
+
+All other files are data used in the four scripts above.
