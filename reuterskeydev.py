@@ -3,6 +3,9 @@
 Created on Mon Apr 10 16:44:58 2017
 
 @author: Rob
+
+Provides a function for accessing the most recent two years of stories from
+the Reuters Key Developments RSS feed
 """
 
 import bs4, requests, re, datetime, time
@@ -85,7 +88,9 @@ def getKeyDevList(ticker, target_date):
 
 # Testing, print most recent year of news for 50 companies from the S&P
 if __name__ == "__main__":
-    print(getKeyDevList('GOOG', datetime.date(2009, 11, 30)))
+    kdlist = getKeyDevList('GOOG', datetime.date(2009, 11, 30))
+    for kd in kdlist:
+        print(kd)
     
 #    ticker_list = ['MMM', 'ADBE', 'AET', 'AFL', 'ARE', 'LNT', 'ALL', 'GOOG',
 #                   'AMZN', 'AAL', 'AMP', 'AMGN', 'AON', 'APA', 'AAPL', 'T',

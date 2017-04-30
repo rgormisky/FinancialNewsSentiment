@@ -5,9 +5,9 @@ Created on Tue Apr 11 15:15:34 2017
 @author: rolgo8
 
 Use the getKeyDevList function in reuterskeydev.py to scrape articles for
-all (except 2) companies in the S&P. Treat this set of articles as a single corpus
-and perform Latent Dirichlet Allocation to automatically extract latent topics.
-The topics themselves are written to '../topicdistributions'
+all (except 2) companies in the S&P. The numbers of regular, positive, and negative
+words in these articles are counted. These word counts are outputted in CSV
+format for later processing in VixReutersModel.py
 """
 
 import wordcounter as wc
@@ -15,8 +15,8 @@ import openpyxl as pyxl
 import numpy as np
 import reuterskeydev as rkd
 import datetime, csv
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
+#from sklearn.feature_extraction.text import CountVectorizer
+#from sklearn.decomposition import LatentDirichletAllocation
 
 # For writing date objects to csv files
 def date_tostring(date_obj):
@@ -38,55 +38,73 @@ def date_tostring(date_obj):
     years_str = str(years)
     return(months_str + '/' + days_str + '/' + years_str)
 
-# For reporting and debugging the topic output
-def print_top_words(model, feature_names, n_top_words):
-    for topic_idx, topic in enumerate(model.components_):
-        print("Topic #%d:" % topic_idx)
-        print(" ".join([feature_names[i]
-                        for i in topic.argsort()[:-n_top_words - 1:-1]]))
-    print()
-
-target_date = datetime.date(2008, 11, 30)    
+def write_event_data():
+    '''
+    leverages the getKeyDevList() function in reuterskeydev.py to collect all
+    stories written about firms in the S&P 500 over the last two years.
     
-ticker_wb = pyxl.load_workbook('SPtickers.xlsx')
-first_sheet_name = ticker_wb.get_sheet_names()[0]
-first_sheet = ticker_wb.get_sheet_by_name(first_sheet_name)
+    Tickers are loaded from the most recent list in SPtickers.xlsx
+    
+    wordcounter.py provides the functionality for counting positive and 
+    negative words based on the General Inquirer dictionary
+    
+    Output is written to a CSV for later processing in VixReutersModel.py
+    '''
+    target_date = datetime.date(20015, 4, 0)    
+        
+    ticker_wb = pyxl.load_workbook('SPtickers.xlsx')
+    first_sheet_name = ticker_wb.get_sheet_names()[0]
+    first_sheet = ticker_wb.get_sheet_by_name(first_sheet_name)
+    
+    ticker_data = first_sheet.values
+    ticker_cols = next(ticker_data)[1:]
+    ticker_data = list(ticker_data)
+    ticker_list = [r[0] for r in ticker_data]
+    
+    ticker_ban_list = ['HAR', 'LLTC'] #HAR is Indian company, LLTC acquired by ADI (also in index)
+    
+    event_tuple_list = [] #(headline, date, article text, word count, pos words, neg words)
+    for ticker in ticker_list:
+        print(ticker)
+        if ticker in ticker_ban_list:
+            continue
+        three_tuples = rkd.getKeyDevList(ticker, target_date)
+        # Only checks for positive words in article text, include headline?
+        for three_tuple in three_tuples:
+            word_count, pos_word_count = wc.count_words(three_tuple[2], 'pos')
+            _, neg_word_count = wc.count_words(three_tuple[2], 'neg')
+            wc_tuple = (word_count, pos_word_count, neg_word_count, ticker)
+            event_tuple = three_tuple + wc_tuple
+            event_tuple_list.append(event_tuple)
+    
+    pos_word_counts = [r[4] for r in event_tuple_list]
+    neg_word_counts = [r[5] for r in event_tuple_list]
+    
+    print('mean_pos_words= ', np.mean(pos_word_counts), 
+          'mean_neg_words= ', np.mean(neg_word_counts))
+    
+    output_tuples = [(date_tostring(r[1]), str(r[3]), str(r[4]), str(r[5]), r[6]) for
+                     r in event_tuple_list]
+    csvname = "raweventlist.csv"
+    with open(csvname, "w") as csvfile:
+        writer = csv.writer(csvfile, delimiter=',', quotechar='|', 
+                            quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
+        writer.writerows(output_tuples)
 
-ticker_data = first_sheet.values
-ticker_cols = next(ticker_data)[1:]
-ticker_data = list(ticker_data)
-ticker_list = [r[0] for r in ticker_data]
-
-ticker_ban_list = ['HAR', 'LLTC'] #HAR is Indian company, LLTC acquired by ADI
-
-event_tuple_list = [] #(headline, date, article text, word count, pos words, neg words)
-for ticker in ticker_list:
-    print(ticker)
-    if ticker in ticker_ban_list:
-        continue
-    three_tuples = rkd.getKeyDevList(ticker, target_date)
-    # Only checks for positive words in article text, include headline?
-    for three_tuple in three_tuples:
-        word_count, pos_word_count = wc.count_words(three_tuple[2], 'pos')
-        _, neg_word_count = wc.count_words(three_tuple[2], 'neg')
-        wc_tuple = (word_count, pos_word_count, neg_word_count, ticker)
-        event_tuple = three_tuple + wc_tuple
-        event_tuple_list.append(event_tuple)
-
-pos_word_counts = [r[4] for r in event_tuple_list]
-neg_word_counts = [r[5] for r in event_tuple_list]
-
-print('mean_pos_words= ', np.mean(pos_word_counts), 
-      'mean_neg_words= ', np.mean(neg_word_counts))
-
-output_tuples = [(date_tostring(r[1]), str(r[3]), str(r[4]), str(r[5]), r[6]) for
-                 r in event_tuple_list]
-csvname = "raweventlist.csv"
-with open(csvname, "w") as csvfile:
-    writer = csv.writer(csvfile, delimiter=',', quotechar='|', 
-                        quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
-    writer.writerows(output_tuples)
-
+###############################################################################
+########################## NOT USED FOR OID 311################################
+###############################################################################
+# For reporting and debugging the topic output
+#def print_top_words(model, feature_names, n_top_words):
+#    '''
+#    Not used for class assignment
+#    '''
+#    for topic_idx, topic in enumerate(model.components_):
+#        print("Topic #%d:" % topic_idx)
+#        print(" ".join([feature_names[i]
+#                        for i in topic.argsort()[:-n_top_words - 1:-1]]))
+#    print()
+     
 # Begin LDA on the entire S&P corpus
 #n_samples = len(article_text_list)
 #n_features = 1000000 # possible words, set arbitrarily high
@@ -129,5 +147,3 @@ with open(csvname, "w") as csvfile:
 #  Find theta distributions
 #  topic_dist = lda.transform(tf)
 #  
-
-

@@ -10,10 +10,8 @@ in a given document.
 Dictionary URL: http://www.wjh.harvard.edu/~inquirer/spreadsheet_guide.htm
 """
 
-import reuterskeydev as rkd
 import openpyxl as pyxl
 import re
-import string
 
 dict_wb = pyxl.load_workbook('inquirerbasic.xlsx')
 dict_first_sheet = dict_wb.get_sheet_by_name(dict_wb.get_sheet_names()[0])
@@ -51,7 +49,4 @@ def count_words(document, category_string):
     word_count = len(words)
     category_word_count = len([w for w in words if w in word_set])
     return(word_count, category_word_count)
-
-#events = rkd.getKeyDevList('GOOG')
-#for event in events:
-#    print(count_words(event[2], 'pos'))    
+ 
